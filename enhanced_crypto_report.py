@@ -14,13 +14,12 @@ EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
 TO_EMAIL = os.environ.get('TO_EMAIL')
 
 # --------------------------
-# Crypto Watchlist (you can add more)
+# Crypto Watchlist (no Ethereum)
 # --------------------------
 CRYPTO_WATCHLIST = [
     'bitcoin',
-    'ethereum',
+    'worldcoin-wld',  # ✅ Correct CoinGecko ID for Worldcoin
     'dogecoin',
-    'worldcoin',
     'cardano',
     'solana',
     'polkadot'
@@ -70,12 +69,12 @@ def generate_chart(prices):
     values = [p['price'] for p in prices]
 
     plt.figure(figsize=(10, 5))
-    plt.bar(coins, values, color='orange')
+    plt.bar(coins, values, color='skyblue')
     plt.title("Current INR Prices of Cryptocurrencies")
     plt.xlabel("Cryptocurrency")
     plt.ylabel("Price in INR")
     plt.tight_layout()
-    chart_path = "price_chart.png"
+    chart_path = os.path.join(os.getcwd(), "price_chart.png")
     plt.savefig(chart_path)
     plt.close()
     return chart_path
@@ -90,11 +89,9 @@ def send_summary_email(content, chart_path):
     msg['To'] = TO_EMAIL
     msg.set_content(content)
 
-    # Attach the chart image
     with open(chart_path, 'rb') as img:
         msg.add_attachment(img.read(), maintype='image', subtype='png', filename='price_chart.png')
 
-    # Send via Gmail SMTP
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         smtp.send_message(msg)
@@ -129,7 +126,6 @@ def generate_report():
         log_data.append(row)
         chart_prices.append({'coin': coin, 'price': price})
 
-    # Log to CSV and generate chart
     log_to_csv(log_data)
     chart_path = generate_chart(chart_prices)
     send_summary_email(summary, chart_path)
