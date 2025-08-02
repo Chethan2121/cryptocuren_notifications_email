@@ -107,7 +107,7 @@ def send_summary_email(summary, chart_paths):
             msg.get_payload()[0].add_related(img.read(), 'image', 'png', cid=f"<{cid}>")
         html += f"<h3>{coin.upper()} - Last 12h Price Trend</h3>"
         html += f"<img src='cid:{cid}' style='width:600px'><br><br>"
-
+    html += "Have a Nice Day Chetha❤️ and Madhura❤️"
     html += "</body></html>"
     msg.add_alternative(html, subtype='html')
 
