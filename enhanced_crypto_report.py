@@ -92,13 +92,13 @@ def plot_line_graph(coin, history):
 # --------------------------
 def send_summary_email(summary, chart_paths):
     msg = EmailMessage()
-    msg['Subject'] = "📊 INR Crypto Prices + 12h Graphs"
+    msg['Subject'] = "📊 INR Crypto Prices"
     msg['From'] = EMAIL_ADDRESS
     msg['To'] = ", ".join(TO_EMAILS)
 
     msg.set_content("This email contains HTML charts. Please view it in an HTML-compatible email client.")
     html = "<html><body>"
-    html += "<h2>📈 INR Crypto Price Report + Profit/Loss Summary</h2>"
+    html += "<h2>📈 INR Crypto Price Summary</h2>"
     html += f"<pre style='font-family: monospace; font-size: 14px'>{summary}</pre>"
 
     for coin, path in chart_paths.items():
@@ -107,7 +107,7 @@ def send_summary_email(summary, chart_paths):
             msg.get_payload()[0].add_related(img.read(), 'image', 'png', cid=f"<{cid}>")
         html += f"<h3>{coin.upper()} - Last 12h Price Trend</h3>"
         html += f"<img src='cid:{cid}' style='width:600px'><br><br>"
-    html += "Have a Nice Day Chetha❤️ and Madhura❤️"
+    html += "<h3><b>Have a Nice Day Chethan❤️ and Madhura❤️</b><h3>"
     html += "</body></html>"
     msg.add_alternative(html, subtype='html')
 
