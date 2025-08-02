@@ -15,6 +15,11 @@ import matplotlib.pyplot as plt
 EMAIL_ADDRESS = os.environ.get('EMAIL_ADDRESS')
 EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
 TO_EMAILS = os.environ.get('TO_EMAILS').split(',')
+TO_EMAILS_RAW = os.environ.get('TO_EMAILS')
+if not TO_EMAILS_RAW:
+    raise EnvironmentError("❌ Missing 'TO_EMAILS' environment variable. Please set it in GitHub Secrets.")
+TO_EMAILS = [email.strip() for email in TO_EMAILS_RAW.split(',')]
+
 
 # --------------------------
 # Crypto Watchlist (with new coins added)
