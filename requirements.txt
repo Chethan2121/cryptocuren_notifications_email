@@ -1,3 +1,5 @@
-requests
-matplotlib
 pandas
+matplotlib
+requests
+pytz
+python-dotenv
