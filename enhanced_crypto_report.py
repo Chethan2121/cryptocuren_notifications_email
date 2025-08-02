@@ -23,7 +23,7 @@ if not EMAIL_ADDRESS or not EMAIL_PASSWORD or not TO_EMAILS_RAW:
 TO_EMAILS = [email.strip() for email in TO_EMAILS_RAW.split(',')]
 
 # --------------------------
-# Only Bitcoin and Worldcoin
+# Crypto Watchlist
 # --------------------------
 CRYPTO_WATCHLIST = [
     'bitcoin',
@@ -31,7 +31,7 @@ CRYPTO_WATCHLIST = [
 ]
 
 # --------------------------
-# Fetch Summary Data
+# Fetch Current Market Data
 # --------------------------
 def get_crypto_data(coin):
     url = f"https://api.coingecko.com/api/v3/coins/{coin}?localization=false&tickers=false&market_data=true"
@@ -62,7 +62,7 @@ def fetch_12h_history(coin):
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
-        return response.json()['prices']  # List of [timestamp, price]
+        return response.json()['prices']
     except Exception as e:
         print(f"❌ Error fetching 12h data for {coin}: {e}")
         return []
@@ -97,19 +97,28 @@ def send_summary_email(summary, chart_paths):
     msg['To'] = ", ".join(TO_EMAILS)
 
     msg.set_content("This email contains HTML charts. Please view it in an HTML-compatible email client.")
+
+    # Build HTML content
     html = "<html><body>"
     html += "<h2>📈 INR Crypto Price Report + Profit/Loss Summary</h2>"
     html += f"<pre style='font-family: monospace; font-size: 14px'>{summary}</pre>"
 
+    # Prepare CIDs and add inline images later
+    image_cid_map = {}
     for coin, path in chart_paths.items():
-        cid = make_msgid(domain='crypto.local')[1:-1]
-        with open(path, 'rb') as img:
-            msg.get_payload()[0].add_related(img.read(), 'image', 'png', cid=f"<{cid}>")
+        cid = make_msgid(domain='crypto.local')[1:-1]  # remove angle brackets
+        image_cid_map[coin] = cid
         html += f"<h3>{coin.upper()} - Last 12h Price Trend</h3>"
         html += f"<img src='cid:{cid}' style='width:600px'><br><br>"
 
     html += "</body></html>"
     msg.add_alternative(html, subtype='html')
+
+    # Attach inline images AFTER html is added
+    for coin, path in chart_paths.items():
+        cid = image_cid_map[coin]
+        with open(path, 'rb') as img:
+            msg.get_payload()[-1].add_related(img.read(), maintype='image', subtype='png', cid=f"<{cid}>")
 
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
@@ -130,7 +139,7 @@ def log_to_csv(log_data):
             writer.writerow(row)
 
 # --------------------------
-# Main
+# Main Function
 # --------------------------
 def generate_report():
     summary = ""
@@ -159,17 +168,21 @@ def generate_report():
         summary += "\n"
         log_data.append(row)
 
+        # Fetch and generate chart
         history = fetch_12h_history(coin)
         if history:
             chart_path = plot_line_graph(coin, history)
             chart_paths[coin] = chart_path
         else:
-            print(f"⚠️ No history for {coin}")
+            print(f"⚠️ No 12h history for {coin}")
 
-        time.sleep(1)  # Respect CoinGecko rate limit
+        time.sleep(1)  # To avoid hitting API rate limit
 
     log_to_csv(log_data)
     send_summary_email(summary, chart_paths)
 
+# --------------------------
+# Run the Script
+# --------------------------
 if __name__ == '__main__':
     generate_report()
