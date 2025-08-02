@@ -98,7 +98,7 @@ def plot_line_graph(coin, history):
     return filename
 
 # --------------------------
-# Send Email with Multiple Inline Charts
+# Send Email with Inline Charts
 # --------------------------
 def send_summary_email(summary, chart_paths):
     msg = EmailMessage()
@@ -108,17 +108,19 @@ def send_summary_email(summary, chart_paths):
 
     html = "<html><body>"
     html += "<h2>📈 INR Crypto Price Report + Profit/Loss Summary</h2>"
-    html += "<pre style='font-family: monospace; font-size: 14px'>" + summary + "</pre>"
+    html += f"<pre style='font-family: monospace; font-size: 14px'>{summary}</pre>"
 
     for coin, path in chart_paths.items():
         cid = make_msgid()[1:-1]
         with open(path, 'rb') as img:
-            msg.get_payload()[0].add_related(img.read(), 'image', 'png', cid=f"<{cid}>")
-        html += f"<h3>{coin.upper()}</h3><img src='cid:{cid}' style='width:600px'><br><br>"
+            img_data = img.read()
+            msg.add_related(img_data, 'image', 'png', cid=f"<{cid}>")
+        html += f"<h3>{coin.upper()} - 24h Chart</h3>"
+        html += f"<img src='cid:{cid}' style='width:600px'><br><br>"
 
     html += "</body></html>"
 
-    msg.set_content("This email contains an HTML version with charts.")
+    msg.set_content("This email contains HTML charts. Please view it in an HTML-compatible email client.")
     msg.add_alternative(html, subtype='html')
 
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
