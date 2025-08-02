@@ -2,7 +2,7 @@ name: 💹 Crypto INR Email Notifier
 
 on:
   schedule:
-    - cron: "*/30 * * * *"  # Every 30 minutes
+    - cron: "*/20 * * * *"  # Every 30 minutes
   workflow_dispatch:        # Manual trigger
 
 jobs:
@@ -27,6 +27,6 @@ jobs:
         env:
           EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+          TO_EMAILS: ${{ secrets.TO_EMAILS }}
         run: |
           python enhanced_crypto_report.py
