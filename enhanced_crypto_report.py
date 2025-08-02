@@ -23,24 +23,15 @@ if not EMAIL_ADDRESS or not EMAIL_PASSWORD or not TO_EMAILS_RAW:
 TO_EMAILS = [email.strip() for email in TO_EMAILS_RAW.split(',')]
 
 # --------------------------
-# Crypto Watchlist (use correct CoinGecko IDs)
+# Only Bitcoin and Worldcoin
 # --------------------------
 CRYPTO_WATCHLIST = [
     'bitcoin',
     'worldcoin-wld',
-    'dogecoin',
-    'cardano',
-    'solana',
-    'polkadot',
-    'kaspa',
-    'ergo',
-    'monero',
-    'ethereum-classic',
-    'litecoin'
 ]
 
 # --------------------------
-# Fetch Summary Data from CoinGecko
+# Fetch Summary Data
 # --------------------------
 def get_crypto_data(coin):
     url = f"https://api.coingecko.com/api/v3/coins/{coin}?localization=false&tickers=false&market_data=true"
@@ -63,46 +54,45 @@ def get_crypto_data(coin):
         return None, {}
 
 # --------------------------
-# Fetch Historical Prices (last 24h)
+# Fetch 12h Historical Prices
 # --------------------------
-def fetch_24h_history(coin):
+def fetch_12h_history(coin):
     url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart"
-    params = {'vs_currency': 'inr', 'days': 1, 'interval': 'hourly'}
+    params = {'vs_currency': 'inr', 'days': 0.5, 'interval': 'hourly'}
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
-        data = response.json()
-        return data['prices']  # List of [timestamp, price]
+        return response.json()['prices']  # List of [timestamp, price]
     except Exception as e:
-        print(f"❌ Error fetching historical data for {coin}: {e}")
+        print(f"❌ Error fetching 12h data for {coin}: {e}")
         return []
 
 # --------------------------
-# Plot Line Graph for a Coin
+# Plot Line Chart for 12h
 # --------------------------
 def plot_line_graph(coin, history):
-    timestamps = [datetime.fromtimestamp(p[0]/1000) for p in history]
+    timestamps = [datetime.fromtimestamp(p[0] / 1000) for p in history]
     prices = [p[1] for p in history]
 
     plt.figure(figsize=(8, 4))
-    plt.plot(timestamps, prices, color='dodgerblue')
-    plt.title(f"{coin.upper()} - 24h INR Price Trend")
+    plt.plot(timestamps, prices, color='dodgerblue', linewidth=2)
+    plt.title(f"{coin.upper()} - Last 12h INR Price")
     plt.xlabel("Time")
     plt.ylabel("Price (INR)")
     plt.grid(True)
     plt.tight_layout()
 
-    filename = f"{coin}_24h.png"
+    filename = f"{coin}_12h.png"
     plt.savefig(filename)
     plt.close()
     return filename
 
 # --------------------------
-# Send Email with Inline Charts
+# Send Email with Inline Images
 # --------------------------
 def send_summary_email(summary, chart_paths):
     msg = EmailMessage()
-    msg['Subject'] = "📊 INR Crypto Prices + 24h Line Graphs"
+    msg['Subject'] = "📊 INR Crypto Prices + 12h Graphs"
     msg['From'] = EMAIL_ADDRESS
     msg['To'] = ", ".join(TO_EMAILS)
 
@@ -115,7 +105,7 @@ def send_summary_email(summary, chart_paths):
         cid = make_msgid(domain='crypto.local')[1:-1]
         with open(path, 'rb') as img:
             msg.get_payload()[0].add_related(img.read(), 'image', 'png', cid=f"<{cid}>")
-        html += f"<h3>{coin.upper()} - 24h Chart</h3>"
+        html += f"<h3>{coin.upper()} - Last 12h Price Trend</h3>"
         html += f"<img src='cid:{cid}' style='width:600px'><br><br>"
 
     html += "</body></html>"
@@ -127,7 +117,7 @@ def send_summary_email(summary, chart_paths):
         print("✅ Email sent to:", ", ".join(TO_EMAILS))
 
 # --------------------------
-# Log Prices to CSV
+# Log to CSV
 # --------------------------
 def log_to_csv(log_data):
     filename = "crypto_price_log.csv"
@@ -135,8 +125,7 @@ def log_to_csv(log_data):
     with open(filename, mode='a', newline='') as file:
         writer = csv.writer(file)
         if not file_exists:
-            header = ["Time", "Coin", "Price (INR)", "1h%", "24h%", "7d%", "14d%", "30d%"]
-            writer.writerow(header)
+            writer.writerow(["Time", "Coin", "Price (INR)", "1h%", "24h%", "7d%", "14d%", "30d%"])
         for row in log_data:
             writer.writerow(row)
 
@@ -155,7 +144,6 @@ def generate_report():
             print(f"⚠️ Skipping {coin}")
             continue
 
-        print(f"✅ {coin.upper()} - ₹{price:,.2f}")
         summary += f"{coin.upper()} - ₹{price:,.2f}\n"
         row = [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), coin.upper(), price]
 
@@ -171,14 +159,14 @@ def generate_report():
         summary += "\n"
         log_data.append(row)
 
-        history = fetch_24h_history(coin)
+        history = fetch_12h_history(coin)
         if history:
             chart_path = plot_line_graph(coin, history)
             chart_paths[coin] = chart_path
         else:
-            print(f"⚠️ No 24h history for {coin}")
+            print(f"⚠️ No history for {coin}")
 
-        time.sleep(1)  # CoinGecko rate limit
+        time.sleep(1)  # Respect CoinGecko rate limit
 
     log_to_csv(log_data)
     send_summary_email(summary, chart_paths)
