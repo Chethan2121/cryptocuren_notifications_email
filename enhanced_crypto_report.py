@@ -27,7 +27,7 @@ TO_EMAILS = [email.strip() for email in TO_EMAILS_RAW.split(',')]
 # --------------------------
 CRYPTO_WATCHLIST = [
     'bitcoin',
-    'worldcoin',  # ✅ FIXED from 'worldcoin-wld'
+    'worldcoin-wld',
     'dogecoin',
     'cardano',
     'solana',
