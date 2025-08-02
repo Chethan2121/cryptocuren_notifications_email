@@ -5,8 +5,9 @@ import csv
 import time
 from datetime import datetime
 from email.message import EmailMessage
+from email.utils import make_msgid
 import matplotlib
-matplotlib.use('Agg')  # for headless environments like GitHub Actions
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 # --------------------------
@@ -14,15 +15,15 @@ import matplotlib.pyplot as plt
 # --------------------------
 EMAIL_ADDRESS = os.environ.get('EMAIL_ADDRESS')
 EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
-TO_EMAILS = os.environ.get('TO_EMAILS').split(',')
 TO_EMAILS_RAW = os.environ.get('TO_EMAILS')
-if not TO_EMAILS_RAW:
-    raise EnvironmentError("❌ Missing 'TO_EMAILS' environment variable. Please set it in GitHub Secrets.")
+
+if not EMAIL_ADDRESS or not EMAIL_PASSWORD or not TO_EMAILS_RAW:
+    raise EnvironmentError("❌ Missing EMAIL_ADDRESS, EMAIL_PASSWORD, or TO_EMAILS environment variables.")
+
 TO_EMAILS = [email.strip() for email in TO_EMAILS_RAW.split(',')]
 
-
 # --------------------------
-# Crypto Watchlist (with new coins added)
+# Crypto Watchlist
 # --------------------------
 CRYPTO_WATCHLIST = [
     'bitcoin',
@@ -31,15 +32,15 @@ CRYPTO_WATCHLIST = [
     'cardano',
     'solana',
     'polkadot',
-    'kaspa',               # ✅ Kaspa
-    'ergo',                # ✅ Ergo
-    'monero',              # ✅ Monero
-    'ethereum-classic',    # ✅ Ethereum Classic
-    'litecoin'             # ✅ Litecoin
+    'kaspa',
+    'ergo',
+    'monero',
+    'ethereum-classic',
+    'litecoin'
 ]
 
 # --------------------------
-# Fetch Crypto Data from CoinGecko
+# Fetch Summary Data from CoinGecko
 # --------------------------
 def get_crypto_data(coin):
     url = f"https://api.coingecko.com/api/v3/coins/{coin}?localization=false&tickers=false&market_data=true"
@@ -58,8 +59,72 @@ def get_crypto_data(coin):
         }
         return inr_price, price_changes
     except Exception as e:
-        print(f"❌ Error fetching data for {coin}: {e}")
+        print(f"❌ Error fetching summary data for {coin}: {e}")
         return None, {}
+
+# --------------------------
+# Fetch Historical Prices (last 24h)
+# --------------------------
+def fetch_24h_history(coin):
+    url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart"
+    params = {'vs_currency': 'inr', 'days': 1, 'interval': 'hourly'}
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        return data['prices']  # List of [timestamp, price]
+    except Exception as e:
+        print(f"❌ Error fetching historical data for {coin}: {e}")
+        return []
+
+# --------------------------
+# Plot Line Graph for a Coin
+# --------------------------
+def plot_line_graph(coin, history):
+    timestamps = [datetime.fromtimestamp(p[0]/1000) for p in history]
+    prices = [p[1] for p in history]
+
+    plt.figure(figsize=(8, 4))
+    plt.plot(timestamps, prices, color='dodgerblue')
+    plt.title(f"{coin.upper()} - 24h INR Price Trend")
+    plt.xlabel("Time")
+    plt.ylabel("Price (INR)")
+    plt.grid(True)
+    plt.tight_layout()
+
+    filename = f"{coin}_24h.png"
+    plt.savefig(filename)
+    plt.close()
+    return filename
+
+# --------------------------
+# Send Email with Multiple Inline Charts
+# --------------------------
+def send_summary_email(summary, chart_paths):
+    msg = EmailMessage()
+    msg['Subject'] = "📊 INR Crypto Prices + 24h Line Graphs"
+    msg['From'] = EMAIL_ADDRESS
+    msg['To'] = ", ".join(TO_EMAILS)
+
+    html = "<html><body>"
+    html += "<h2>📈 INR Crypto Price Report + Profit/Loss Summary</h2>"
+    html += "<pre style='font-family: monospace; font-size: 14px'>" + summary + "</pre>"
+
+    for coin, path in chart_paths.items():
+        cid = make_msgid()[1:-1]
+        with open(path, 'rb') as img:
+            msg.get_payload()[0].add_related(img.read(), 'image', 'png', cid=f"<{cid}>")
+        html += f"<h3>{coin.upper()}</h3><img src='cid:{cid}' style='width:600px'><br><br>"
+
+    html += "</body></html>"
+
+    msg.set_content("This email contains an HTML version with charts.")
+    msg.add_alternative(html, subtype='html')
+
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+        smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        smtp.send_message(msg)
+        print("✅ Email sent to:", ", ".join(TO_EMAILS))
 
 # --------------------------
 # Log Prices to CSV
@@ -76,54 +141,15 @@ def log_to_csv(log_data):
             writer.writerow(row)
 
 # --------------------------
-# Generate Bar Chart of Prices
-# --------------------------
-def generate_chart(prices):
-    coins = [p['coin'].upper() for p in prices]
-    values = [p['price'] for p in prices]
-
-    plt.figure(figsize=(12, 6))
-    plt.bar(coins, values, color='teal')
-    plt.title("Current INR Prices of Cryptocurrencies")
-    plt.xlabel("Cryptocurrency")
-    plt.ylabel("Price in INR")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    chart_path = os.path.join(os.getcwd(), "price_chart.png")
-    plt.savefig(chart_path)
-    plt.close()
-    return chart_path
-
-# --------------------------
-# Send Email with Chart Attachment
-# --------------------------
-def send_summary_email(content, chart_path):
-    msg = EmailMessage()
-    msg['Subject'] = "📊 INR Crypto Prices + Chart & History"
-    msg['From'] = EMAIL_ADDRESS
-    msg['To'] = ", ".join(TO_EMAILS)
-    msg.set_content(content)
-
-    with open(chart_path, 'rb') as img:
-        msg.add_attachment(img.read(), maintype='image', subtype='png', filename='price_chart.png')
-
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-        smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        smtp.send_message(msg)
-        print("✅ Email sent to:", ", ".join(TO_EMAILS))
-
-# --------------------------
-# Main Execution
+# Main
 # --------------------------
 def generate_report():
-    if not all([EMAIL_ADDRESS, EMAIL_PASSWORD, TO_EMAILS]):
-        raise ValueError("❌ Missing environment variables. Please set EMAIL_ADDRESS, EMAIL_PASSWORD, and TO_EMAILS.")
-
-    summary = "📈 INR Crypto Price Report + Profit/Loss Summary\n\n"
+    summary = ""
     log_data = []
-    chart_prices = []
+    chart_paths = {}
 
     for coin in CRYPTO_WATCHLIST:
+        print(f"🔍 Processing {coin}...")
         price, changes = get_crypto_data(coin)
         if price is None:
             continue
@@ -132,23 +158,26 @@ def generate_report():
         row = [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), coin.upper(), price]
 
         for interval in ['1h', '24h', '7d', '14d', '30d']:
-            change = changes.get(interval)
-            if change is not None:
-                summary += f"  • {interval}: {change:.2f}%\n"
-                row.append(change)
+            val = changes.get(interval)
+            if val is not None:
+                summary += f"  • {interval}: {val:.2f}%\n"
+                row.append(val)
             else:
-                summary += f"  • {interval}: ❌ Not available\n"
+                summary += f"  • {interval}: ❌\n"
                 row.append("N/A")
 
         summary += "\n"
         log_data.append(row)
-        chart_prices.append({'coin': coin, 'price': price})
 
-        time.sleep(1)  # sleep to avoid API rate limit
+        history = fetch_24h_history(coin)
+        if history:
+            chart_path = plot_line_graph(coin, history)
+            chart_paths[coin] = chart_path
+
+        time.sleep(1)  # Respect CoinGecko rate limits
 
     log_to_csv(log_data)
-    chart_path = generate_chart(chart_prices)
-    send_summary_email(summary, chart_path)
+    send_summary_email(summary, chart_paths)
 
 if __name__ == '__main__':
     generate_report()
