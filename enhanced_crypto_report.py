@@ -2,8 +2,11 @@ import os
 import requests
 import smtplib
 import csv
+import time
 from datetime import datetime
 from email.message import EmailMessage
+import matplotlib
+matplotlib.use('Agg')  # for headless environments like GitHub Actions
 import matplotlib.pyplot as plt
 
 # --------------------------
@@ -11,18 +14,23 @@ import matplotlib.pyplot as plt
 # --------------------------
 EMAIL_ADDRESS = os.environ.get('EMAIL_ADDRESS')
 EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
-TO_EMAIL = os.environ.get('TO_EMAIL')
+TO_EMAILS = os.environ.get('TO_EMAILS').split(',')
 
 # --------------------------
-# Crypto Watchlist (no Ethereum)
+# Crypto Watchlist (with new coins added)
 # --------------------------
 CRYPTO_WATCHLIST = [
     'bitcoin',
-    'worldcoin-wld',  # ✅ Correct CoinGecko ID for Worldcoin
+    'worldcoin-wld',
     'dogecoin',
     'cardano',
     'solana',
-    'polkadot'
+    'polkadot',
+    'kaspa',               # ✅ Kaspa
+    'ergo',                # ✅ Ergo
+    'monero',              # ✅ Monero
+    'ethereum-classic',    # ✅ Ethereum Classic
+    'litecoin'             # ✅ Litecoin
 ]
 
 # --------------------------
@@ -32,6 +40,7 @@ def get_crypto_data(coin):
     url = f"https://api.coingecko.com/api/v3/coins/{coin}?localization=false&tickers=false&market_data=true"
     try:
         response = requests.get(url)
+        response.raise_for_status()
         data = response.json()
         market_data = data['market_data']
         inr_price = market_data['current_price']['inr']
@@ -68,11 +77,12 @@ def generate_chart(prices):
     coins = [p['coin'].upper() for p in prices]
     values = [p['price'] for p in prices]
 
-    plt.figure(figsize=(10, 5))
-    plt.bar(coins, values, color='skyblue')
+    plt.figure(figsize=(12, 6))
+    plt.bar(coins, values, color='teal')
     plt.title("Current INR Prices of Cryptocurrencies")
     plt.xlabel("Cryptocurrency")
     plt.ylabel("Price in INR")
+    plt.xticks(rotation=45)
     plt.tight_layout()
     chart_path = os.path.join(os.getcwd(), "price_chart.png")
     plt.savefig(chart_path)
@@ -86,7 +96,7 @@ def send_summary_email(content, chart_path):
     msg = EmailMessage()
     msg['Subject'] = "📊 INR Crypto Prices + Chart & History"
     msg['From'] = EMAIL_ADDRESS
-    msg['To'] = TO_EMAIL
+    msg['To'] = ", ".join(TO_EMAILS)
     msg.set_content(content)
 
     with open(chart_path, 'rb') as img:
@@ -95,12 +105,15 @@ def send_summary_email(content, chart_path):
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         smtp.send_message(msg)
-        print("✅ Email sent with chart successfully.")
+        print("✅ Email sent to:", ", ".join(TO_EMAILS))
 
 # --------------------------
 # Main Execution
 # --------------------------
 def generate_report():
+    if not all([EMAIL_ADDRESS, EMAIL_PASSWORD, TO_EMAILS]):
+        raise ValueError("❌ Missing environment variables. Please set EMAIL_ADDRESS, EMAIL_PASSWORD, and TO_EMAILS.")
+
     summary = "📈 INR Crypto Price Report + Profit/Loss Summary\n\n"
     log_data = []
     chart_prices = []
@@ -125,6 +138,8 @@ def generate_report():
         summary += "\n"
         log_data.append(row)
         chart_prices.append({'coin': coin, 'price': price})
+
+        time.sleep(1)  # sleep to avoid API rate limit
 
     log_to_csv(log_data)
     chart_path = generate_chart(chart_prices)
